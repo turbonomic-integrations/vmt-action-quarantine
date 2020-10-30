@@ -188,8 +188,8 @@ complete the steps in [Deployment](#deployment), then return here to configure
 your policy.
 
 # Deployment
-Once you have satisfied the (Prerequisites)[#prerequisites], and configured this project and
-Turbonomic appropriately (Configuration)[#configuration], you are now ready to deploy this
+Once you have satisfied the [Prerequisites](#prerequisites), and configured this project and
+Turbonomic appropriately [Configuration](#configuration), you are now ready to deploy this
 integration to your Kubernetes cluster.
 
 First, save the configurations you've prepared with the following command;
