@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quarantine
+  namespace: turbointegrations
+  labels:
+    environment: prod
+    team: turbointegrations
+    app: quarantine
+    version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quarantine
+  template:
+    metadata:
+      labels:
+        environment: prod
+        team: turbointegrations
+        app: quarantine
+        version: "1.0.0"
+    spec:
+      containers:
+      - name: quarantine
+        image: vmt-action-quarantine:1.0.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TURBOPASS
+          valueFrom:
+            secretKeyRef:
+              name: quarantinekeys
+              key: turbopass
+        - name: TURBOUSER
+          valueFrom:
+            secretKeyRef:
+              name: quarantinekeys
+              key: turbouser
+        - name: ADDR
+          value: quarantine.turbointegrations.svc.cluster.local
+        - name: TURBOADDR
+          value: api.turbonomic.svc.cluster.local:8080
+        - name: MANPATH
+          value: /opt/turbonomic/actionscripts/quarantine/config/manifest.json
+        ports:
+        - name: sshd
+          containerPort: 22
+        volumeMounts:
+        - mountPath: /opt/turbonomic/actionscripts/quarantine/config
+          name: config
+        - mountPath: /sshkeys
+          name: sshkeys
+      volumes:
+      - name: config
+        configMap:
+          name: quarantinecfg
+      - name: sshkeys
+        secret:
+          secretName: quarantinekeys
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quarantine
+  namespace: turbointegrations
+spec:
+  ports:
+  - name: sshd
+    port: 22
+    protocol: TCP
+  selector:
+    app: quarantine

@@ -1,0 +1,12 @@
+{
+ "scripts": [
+   	{
+   		"name": "Quarantine VM MOVE",
+   		"description": "Quarantines VMs after move, based on critera set in the config file.",
+   		"scriptPath": "/opt/turbonomic/actionscripts/quarantine/quarantine.py",
+   		"entityType": "VIRTUAL_MACHINE",
+   		"actionType": "MOVE",
+  		"actionPhase": "POST"
+   	}
+  ]
+}

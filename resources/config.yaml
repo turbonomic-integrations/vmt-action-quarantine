@@ -1,0 +1,8 @@
+---
+quarantineRules:
+  - actionType: MOVE
+    entityType: VIRTUAL_MACHINE
+    quarantineMethods:
+    - type: vmt
+      groupName: QuarantineVM
+      groupType: VirtualMachine
