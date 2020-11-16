@@ -3,16 +3,22 @@ This integration is intended to be run as a POST action orchestration step and
 quarantine service entities if they have met certain criteria for failed attempts
 of the same action.
 
+Version: 1.0.1.dev3
+
 # Prerequisites
 Deploying this solution stands up a Kubernetes pod which serves SSH, and gets
 added to Turbonomic as an orchestration target.
 
 This requires the following prerequisites (also documented in [docker-orchestration](https://github.com/turbonomic-integrations/docker-orchestration)).
+* A Kubernetes namespace named `turbointegrations`
 * SSH Daemon Host Key (public and private)
   * This is used to uniquely identify the SSH "host", in this case, the single running pod in Kubernetes which hosts this integration.
 * SSH User Authorized Key (public and private)
   * This is used to uniquely identify the SSH "user" which is authorized to connect to the SSH Daemon.
 * Turbonomic API Service Account Username & Password
+
+If your Kubernetes cluster does not already have a `turbointegrations` namespace, you may create it with;
+`$ kubectl create namespace turbointegrations`
 
 To generate a host key and user key the following commands can be used
 (ProTip: Do *NOT* set a passphrase for the keys.);
@@ -65,7 +71,7 @@ Each rule has the following properties;
   * Required
 * `entityType`
   * The Turbonomic entity type to match I.E. ("VIRTUAL_MACHINE","PHYSICAL_MACHINE", etc)
-  * Required
+  * Optional
 * `lookbackHours`
   * The number of hours into the past to look for historical action results.
   * Optional (Default: 720)

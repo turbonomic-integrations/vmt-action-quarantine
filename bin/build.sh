@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION=1.0.0
+VERSION=1.0.1.dev3
 source clean.sh
 cp ../README.md ../build/
 cp ../README.pdf ../build/

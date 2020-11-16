@@ -95,7 +95,12 @@ class Event:
 
     def __init__(self, actionDto):
         self.actionType = actionDto['actionType']
-        self.entityType = actionDto.get('entityType')
+        # Orchestration Probe location
+        if 'targetSE' in actionDto:
+            self.entityType = actionDto['targetSE'].get('entityType')
+        # Action API DTO location
+        if 'target' in actionDto:
+            self.entityType = actionDto['target'].get('entityType')
         self.uuid = actionDto['uuid']
         self.result = actionDto.get('actionState')
         self.createTime = actionDto.get('createTime')
@@ -155,9 +160,6 @@ class Patient:
             "actionInput": {
                 "startTime": f"-{lookbackHours}h",
                 "endTime": "-0d",
-                "actionTypeList": [
-                    self.triggerEvent.actionType
-                ],
                 "actionStateList": [
                     "SUCCEEDED",
                     "FAILED"
@@ -165,7 +167,14 @@ class Patient:
             }
         }
         actions = vmt.request(
-            'actions', method='POST', dto=json.dumps(actionsDto))[0]['actions']
+            'actions', method='POST', dto=json.dumps(actionsDto))
+        if actions and 'actions' in actions[0]:
+            actions = actions[0]['actions']
+        else:
+            actions = []
+
+        umsg.log(f"{len(actions)} actions returned for entity {self.uuid}",
+                 level="DEBUG")
         return [Event(e) for e in actions]
 
 
@@ -184,7 +193,7 @@ class Ward:
         To be implemented by inheriting classes."""
         pass
 
-    def discharge_eligible_patients(self) -> List[Patient]:
+    def discharge_eligible_patients(self) -> int:
         """Removes all patients from quarantine meeting the criteria.
 
         To be implemented by inheriting classes."""
@@ -275,10 +284,11 @@ class VmtWard(Ward):
         group_uuid = self._get_group()['uuid']
         members = vmt.get_group_members(group_uuid)
         vmt.update_static_group_members(group_uuid, [])
-        return [Patient(m) for m in members]
+        return len(members)
 
 
 class VcenterWard(Ward):
+    """An incomplete implementation of a vCenter quarantine ward (WIP)"""
     def __init__(self, hostname, user, passwd, config):
         self.hostname = hostname
         self.vc = SmartConnectNoSSL(host=self.hostname, user=user, pwd=passwd)
@@ -350,6 +360,7 @@ class WardFactory:
         self._ward_cache = {}
 
     def _unique_ward_key(self, config):
+        # TODO: Maybe ask the concrete ward class for the unique key?
         if config['type'] == 'vmt':
             return f"{config['type']}-{config['groupName']}"
         return config['type']
@@ -380,7 +391,7 @@ class WardFactory:
 
     def all_wards(self):
         """Return all cached instances of :py:class:`~Ward`."""
-        return self._ward_cache.values()
+        return self._ward_cache
 
 
 class Diagnostician:
@@ -427,6 +438,9 @@ class Diagnostician:
         this diagnostician is looking for "RESIZE" events, this will return
         false.
 
+        TODO: This should also check that the triggerEvent was a failure,
+        however actionState is not exposed by the SDK Probe action information.
+
         Return:
             `True` if triage criteria is met, `False` otherwise.
         """
@@ -459,19 +473,29 @@ class Diagnostician:
             events,
             key=lambda action: read_isodate(action.createTime))
 
+        filteredEvents = [a for a in sortedEvents
+                          if a.actionType == self.actionType]
+
+        # TODO: This filter will never match, since the action DTO has the
+        # entity type in `className` presenting in camel case, whereas the
+        # orchestration data has the entity type in `entityType` presenting in
+        # snake case.
+        if self.entityType:
+            filteredEvents = [a for a in filteredEvents
+                              if a.entityType == self.entityType]
+
         if self.attemptCount:
-            sortedEvents = sortedEvents[self.attemptCount*-1:]
+            filteredEvents = filteredEvents[self.attemptCount*-1:]
 
         failedActions = [
-            a for a in sortedEvents
+            a for a in filteredEvents
             if a.result and a.result.lower() == 'failed']
 
         diagnosed = len(failedActions) >= self.failureCount
-        # TODO: Implement class mixin for umsg correctly.
-        # if diagnosed:
-        #     umsg.log(
-        #         f"Patient {patient.uuid} diagnosed with {len(failedActions)} "
-        #         f"failed actions out of {len(sortedEvents)}", level="Debug")
+        if diagnosed:
+            umsg.log(
+                f"Patient {patient.uuid} diagnosed with {len(failedActions)} "
+                f"failed actions out of {len(sortedEvents)}", level="Debug")
         return diagnosed
 
     def admit(self, patient: Patient):
@@ -508,7 +532,8 @@ class Diagnostician:
 if __name__ == '__main__':
     parser = configargparse.ArgumentParser(
         description="Action script for quarantining Service Entities based on"
-        " config criteria."
+        " config criteria.",
+        default_config_files=['~/.vmt-action-quarantine']
     )
 
     parser.add(
@@ -569,8 +594,11 @@ if __name__ == '__main__':
             diagnosticians.append(Diagnostician(rule, ward_factory))
 
         if args.discharge:
-            for ward in ward_factory.all_wards():
-                ward.discharge_eligible_patients()
+            umsg.log("Removing all qualifiying entities from Quarantine.")
+            for key, ward in ward_factory.all_wards().items():
+                discharged = ward.discharge_eligible_patients()
+                umsg.log(f"Removed {discharged} entities from Quarantine"
+                         f" for {key}")
         else:
             entity_name = os.environ.get('VMT_TARGET_NAME')
             umsg.log(
@@ -579,6 +607,12 @@ if __name__ == '__main__':
             stdinDto = json.loads(sys.stdin.read())
             patient = Patient(stdinDto)
 
+            if args.debug:
+                vmt = vmtjit.get_session()
+                action = vmt.get_actions(uuid=patient.triggerEvent.uuid)
+                umsg.log("Action at time of query\r\n"
+                         f"{json.dumps(action, indent=2)}", level="DEBUG")
+
             for diagnostician in diagnosticians:
                 if diagnostician.triage(patient):
                     if diagnostician.diagnose(vmtjit.get_session(), patient):
@@ -586,6 +620,6 @@ if __name__ == '__main__':
                         diagnostician.admit(patient)
                         umsg.log(
                             f"Quarantined {entity_name} matching criteria - "
-                            f"{diagnostician.critera()}")
+                            f"{diagnostician.criteria()}")
     except Exception as e:
         umsg.log(f"Exception {e}", exc_info=True, level="Error")

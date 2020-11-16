@@ -7,7 +7,7 @@ metadata:
     environment: prod
     team: turbointegrations
     app: quarantine
-    version: "1.0.0"
+    version: "1.0.1.dev3"
 spec:
   replicas: 1
   selector:
@@ -19,11 +19,11 @@ spec:
         environment: prod
         team: turbointegrations
         app: quarantine
-        version: "1.0.0"
+        version: "1.0.1.dev3"
     spec:
       containers:
       - name: quarantine
-        image: vmt-action-quarantine:1.0.0
+        image: vmt-action-quarantine:1.0.1.dev3
         imagePullPolicy: IfNotPresent
         env:
         - name: TURBOPASS
