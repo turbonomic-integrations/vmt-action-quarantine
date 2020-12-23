@@ -9,6 +9,9 @@ import pytest
 import vmtmock as vmtconnect
 import quarantine
 
+umsg.init(level=logging.DEBUG)
+umsg.add_handler(logging.StreamHandler)
+
 def generate_action(actionType, createTime, actionState):
     return {
         "uuid": str(uuid.uuid4()),
@@ -56,10 +59,10 @@ def test_failures_in_a_row(times, tries, payload, assertion):
     }
     rule = {
         "actionType": "MOVE",
-        "entityType": "VIRTUAL_MACHINE",
+        # "entityType": "VIRTUAL_MACHINE",
         "failureCount": times,
         "attemptCount": tries,
         "quarantineMethods": []
     }
-    d = quarantine.Diagnostician(rule, quarantine.WardFactory(quarantine.VmtJit()))
-    assert d.diagnose(vmt, quarantine.Patient(asdto)) == assertion
+    d = quarantine.Diagnostician(rule, quarantine.WardFactory(quarantine.VmtJit()), logger=umsg.get_attr("logger"))
+    assert d.diagnose(vmt, quarantine.Patient(asdto, logger=umsg.get_attr("logger"))) == assertion

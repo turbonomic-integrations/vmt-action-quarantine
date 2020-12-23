@@ -95,6 +95,7 @@ class Event:
 
     def __init__(self, actionDto):
         self.actionType = actionDto['actionType']
+        self.entityType = None
         # Orchestration Probe location
         if 'targetSE' in actionDto:
             self.entityType = actionDto['targetSE'].get('entityType')
@@ -122,12 +123,13 @@ class Patient:
             :func:`~Patient.get_entity` is executed.
     """
 
-    def __init__(self, actionScriptDto):
+    def __init__(self, actionScriptDto, logger=None):
         entity = actionScriptDto['actionItem'][0]['targetSE']
         self.triggerEvent = Event(actionScriptDto['actionItem'][0])
         self.uuid = entity['turbonomicInternalId']
         self.tags = []
         self.vendorIds = {}
+        self.logger = logger
 
     def get_entity(self, vmt: vmtconnect.Connection):
         """Fetch additional details about the patient.
@@ -173,8 +175,12 @@ class Patient:
         else:
             actions = []
 
-        umsg.log(f"{len(actions)} actions returned for entity {self.uuid}",
-                 level="DEBUG")
+        successful = [a for a in actions if a['actionState'] == "SUCCEEDED"]
+        failed = [a for a in actions if a['actionState'] == "FAILED"]
+
+        umsg.log(f"{len(actions)} actions returned for entity {self.uuid}. "
+                 f"Failed: {len(failed)}, Succeeded: {len(successful)}",
+                 level="DEBUG", logger=self.logger)
         return [Event(e) for e in actions]
 
 
@@ -418,7 +424,8 @@ class Diagnostician:
             quarantined if the criteria are met.
     """
 
-    def __init__(self, quarantineRuleConfig, wardFactory: WardFactory):
+    def __init__(self, quarantineRuleConfig, wardFactory: WardFactory,
+                 logger=None):
         self.actionType = quarantineRuleConfig['actionType']
         self.entityType = quarantineRuleConfig.get('entityType')
         self.lookbackHours = quarantineRuleConfig.get('lookbackHours', 720)
@@ -427,6 +434,7 @@ class Diagnostician:
         self.wards = []
         for ward in quarantineRuleConfig['quarantineMethods']:
             self.wards.append(wardFactory.get_ward(ward))
+        self.logger = logger
 
     def triage(self, patient: Patient):
         """Verify the patient's triggering event matches criteria.
@@ -495,7 +503,8 @@ class Diagnostician:
         if diagnosed:
             umsg.log(
                 f"Patient {patient.uuid} diagnosed with {len(failedActions)} "
-                f"failed actions out of {len(sortedEvents)}", level="Debug")
+                f"failed actions out of {len(sortedEvents)}", level="DEBUG",
+                logger=self.logger)
         return diagnosed
 
     def admit(self, patient: Patient):
@@ -525,6 +534,8 @@ class Diagnostician:
             retval += f" out of {self.attemptCount} attempts."
         else:
             retval += " in a row."
+
+        retval += f" In the last {self.lookbackHours} hours."
 
         return retval
 
@@ -621,5 +632,15 @@ if __name__ == '__main__':
                         umsg.log(
                             f"Quarantined {entity_name} matching criteria - "
                             f"{diagnostician.criteria()}")
+                    else:
+                        umsg.log(f"Skipping {entity_name} not matching "
+                                 f"criteria - {diagnostician.criteria()}",
+                                 level="DEBUG")
+                else:
+                    umsg.log(
+                        f"{entity_name} did not match entityType/actionType "
+                        f"{diagnostician.entityType}/{diagnostician.actionType}"
+                        " ruleset. Skipping check for additional criteria.",
+                        level="DEBUG")
     except Exception as e:
         umsg.log(f"Exception {e}", exc_info=True, level="Error")
