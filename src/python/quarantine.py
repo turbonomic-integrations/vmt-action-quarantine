@@ -119,6 +119,7 @@ class Patient:
 
     def __init__(self, actionScriptDto):
         entity = actionScriptDto['actionItem'][0]['targetSE']
+        self.name = actionScriptDto['actionItem'][0]['targetSE']['displayName']
         self.triggerEvent = Event(actionScriptDto['actionItem'][0])
         self.actionState = actionScriptDto['actionState']
         self.uuid = entity['turbonomicInternalId']
@@ -234,7 +235,6 @@ class VmtWard(Ward):
 
     def _get_group(self):
         if not self.group:
-            # umsg.log(f"Group Name to lookup: {self.group_name}")
             # group = self.vmtjit.get_session() \
             #     .get_group_by_name(self.group_name)
             group = self.vmtjit.get_session() \
@@ -434,8 +434,6 @@ class Diagnostician:
             `True` if triage criteria is met, `False` otherwise.
         """
 
-        umsg.log(f"Diag Action Type: {self.actionType}, Patient Trigger Action: {patient.triggerEvent.actionType} ")
-        umsg.log(f"Diag Entity Type: {self.entityType}, Patient Entity Action: {patient.triggerEvent.entityType} ")
         if self.actionType == patient.triggerEvent.actionType and \
            not self.entityType:
             return True
@@ -475,8 +473,8 @@ class Diagnostician:
                 failedActions = [
                     a for a in sortedEvents
                     if a.result and a.result.lower() == 'failed']
-
-                umsg.log(f"Failed Actions Count: {len(failedActions)}, Tolerable Failed Actions {self.failureCount}")
+        
+                umsg.log(f"{patient.name} - Failed Actions Count: {len(failedActions)}, Tolerable Failed Actions {self.failureCount}")
                 diagnosed = len(failedActions) >= self.failureCount
                 # TODO: Implement class mixin for umsg correctly.
                 # if diagnosed:
@@ -485,10 +483,10 @@ class Diagnostician:
                 #         f"failed actions out of {len(sortedEvents)}", level="Debug")
                 
             except IndexError:
-                umsg.log(f"{self.failureCount} failed actions required for admitting, but no events were returned in lookup")
+                umsg.log(f"{self.failureCount} failed actions required for admitting {patient.name}, but no events were returned in lookup")
                 diagnosed = False
 
-        umsg.log(f"Patient needs admitting: {diagnosed}") if diagnosed else None
+        umsg.log(f"Patient {patient.name} needs admitting: {diagnosed}") if diagnosed else None
         return diagnosed
 
     def admit(self, patient: Patient):
@@ -584,9 +582,6 @@ if __name__ == '__main__':
         # the wards in the ward factory.
         for rule in config['quarantineRules']:
             diagnosticians.append(Diagnostician(rule, ward_factory))
-        
-        umsg.log(f"Diagnosticians: {diagnosticians}")
-        umsg.log(f"Diagnosticians: {diagnosticians}",)
 
         if args.discharge:
             for ward in ward_factory.all_wards():
@@ -600,7 +595,7 @@ if __name__ == '__main__':
             patient = Patient(stdinDto)
 
             for diagnostician in diagnosticians:
-                umsg.log(f"Testing Diagnostician: {diagnostician}")
+
                 if diagnostician.triage(patient):
                     umsg.log(f"Patient {entity_name} needs to be diagnosed")
                     if diagnostician.diagnose(vmtjit.get_session(), patient):
