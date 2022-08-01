@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/opt/venv/bin/python
 
 import os
 import sys
@@ -184,7 +184,7 @@ class Ward:
         To be implemented by inheriting classes."""
         pass
 
-    def discharge_eligible_patients(self) -> List[Patient]:
+    def discharge_eligible_patients(self) -> List[Patient]:  # type: ignore
         """Removes all patients from quarantine meeting the criteria.
 
         To be implemented by inheriting classes."""
@@ -234,8 +234,11 @@ class VmtWard(Ward):
 
     def _get_group(self):
         if not self.group:
+            # umsg.log(f"Group Name to lookup: {self.group_name}")
+            # group = self.vmtjit.get_session() \
+            #     .get_group_by_name(self.group_name)
             group = self.vmtjit.get_session() \
-                .get_group_by_name(self.group_name)
+                .search(types=['Group'],q=self.group_name)
             if not group:
                 self.group = self.vmtjit.get_session() \
                     .add_static_group(self.group_name, self.group_type)[0]
@@ -583,6 +586,7 @@ if __name__ == '__main__':
             diagnosticians.append(Diagnostician(rule, ward_factory))
         
         umsg.log(f"Diagnosticians: {diagnosticians}")
+        umsg.log(f"Diagnosticians: {diagnosticians}",)
 
         if args.discharge:
             for ward in ward_factory.all_wards():
