@@ -9,7 +9,7 @@ RUN pip install --upgrade pip && \
 
 FROM python:3.8-alpine
 COPY --from=compile-image /opt/venv /opt/venv
-COPY ./entrypoint.sh /entrypoint.sh
+COPY src/bash/entrypoint.sh /entrypoint.sh
 
 COPY entrypoint.sh /entrypoint.sh
 COPY src/python/quarantine.py /opt/turbonomic/actionscripts/quarantine/
