@@ -6,6 +6,8 @@ import json
 import logging
 
 from typing import List
+from time import sleep
+from random import seed, randrange
 
 import umsg
 import yaml
@@ -153,20 +155,19 @@ class Patient:
             lookbackHours (int): Number of hours into the past to query.
         """
         actionsDto = {
-            "actionInput": {
-                "startTime": f"-{lookbackHours}h",
-                "endTime": "-0d",
-                "actionTypeList": [
-                    self.triggerEvent.actionType
-                ],
-                "actionStateList": [
-                    "SUCCEEDED",
-                    "FAILED"
-                ]
-            }
-        }
+                        "startDate": f"-{lookbackHours}h",
+                        "startTime": f"-{lookbackHours}h",
+                        "actionStateList": [
+                            "SUCCEEDED",
+                            "FAILED"
+                        ],
+                        "detailLevel": "EXECUTION"
+                     }
+        
+        
+    
         actions = vmt.request(
-            'actions', method='POST', dto=json.dumps(actionsDto))[0]
+            f'entities/{self.uuid}/actions', method='POST', dto=json.dumps(actionsDto))
         return [Event(e) for e in actions]
 
 
@@ -458,7 +459,9 @@ class Diagnostician:
             `True` if the patient should be quarantined based on this
             diagnostician's ruleset, `False` otherwise.
         """
-        if self.failureCount == 1 and patient.actionState in ['FAILING', 'FAILED']:
+
+        action_state = 1 if patient.actionState in ['FAILING', 'FAILED'] else 0
+        if self.failureCount == 1 and action_state:
             diagnosed = True
         else:
             try:
@@ -474,8 +477,8 @@ class Diagnostician:
                     a for a in sortedEvents
                     if a.result and a.result.lower() == 'failed']
         
-                umsg.log(f"{patient.name} - Failed Actions Count: {len(failedActions)}, Tolerable Failed Actions {self.failureCount}")
-                diagnosed = len(failedActions) >= self.failureCount
+                umsg.log(f"{patient.name} - Failed Actions Count: {len(failedActions)+action_state}, Tolerable Failed Actions {self.failureCount}")
+                diagnosed = len(failedActions)+action_state >= self.failureCount
                 # TODO: Implement class mixin for umsg correctly.
                 # if diagnosed:
                 #     umsg.log(
@@ -593,7 +596,8 @@ if __name__ == '__main__':
 
             stdinDto = json.loads(sys.stdin.read())
             patient = Patient(stdinDto)
-
+            seed(stdinDto['actionOid'])
+            sleep(randrange(0,3000)/1000)
             for diagnostician in diagnosticians:
 
                 if diagnostician.triage(patient):
